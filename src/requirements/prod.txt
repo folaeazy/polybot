@@ -1,0 +1,5 @@
+# Inherits everything from base
+-r base.txt
+
+# ── Observability ─────────────────────────────────────────────────────────────
+sentry-sdk==2.5.1          # error tracking + alerting in production
