@@ -12,6 +12,7 @@ To connect the real API later:
 from datetime import datetime, timezone
 
 from models.market import Market, Outcome
+import random
 
 
 class PolymarketClient:
@@ -24,6 +25,7 @@ class PolymarketClient:
 
     def __init__(self, api_url: str = "https://api.polymarket.com") -> None:
         self.api_url = api_url
+        self._price_memory: dict[str, float] = {}
 
     def get_markets(self) -> list[Market]:
         """Fetch all available markets and return them as typed dataclasses."""
@@ -38,14 +40,16 @@ class PolymarketClient:
             response = httpx.get(f"{self.api_url}/markets")
             response.raise_for_status()
             return response.json()["markets"]
+            
         """
+        yes_price = self._mutate_price("poly-001", 0.34)
         return [
             {
                 "id": "poly-001",
                 "question": "Will ETH exceed $5,000 before July 2025?",
                 "outcomes": [
-                    {"name": "YES", "price": 0.34},
-                    {"name": "NO",  "price": 0.66},
+                    {"name": "YES", "price": yes_price},
+                    {"name": "NO",  "price": 1 - yes_price},
                 ],
                 "volume": 128_450.75,
                 "active": True,
@@ -54,8 +58,8 @@ class PolymarketClient:
                 "id": "poly-002",
                 "question": "Will the Fed cut rates in Q3 2025?",
                 "outcomes": [
-                    {"name": "YES", "price": 0.57},
-                    {"name": "NO",  "price": 0.43},
+                    {"name": "YES", "price": yes_price},
+                    {"name": "NO",  "price": 1 - yes_price},
                 ],
                 "volume": 54_210.00,
                 "active": True,
@@ -64,8 +68,8 @@ class PolymarketClient:
                 "id": "poly-003",
                 "question": "Will Apple release a foldable iPhone in 2025?",
                 "outcomes": [
-                    {"name": "YES", "price": 0.12},
-                    {"name": "NO",  "price": 0.88},
+                    {"name": "YES", "price": yes_price},
+                    {"name": "NO",  "price": 1 - yes_price},
                 ],
                 "volume": 8_900.50,
                 "active": True,
@@ -74,8 +78,8 @@ class PolymarketClient:
                 "id": "poly-004",
                 "question": "Will Bitcoin reach $100k before 2024 ends?",
                 "outcomes": [
-                    {"name": "YES", "price": 0.91},
-                    {"name": "NO",  "price": 0.09},
+                    {"name": "YES", "price": yes_price},
+                    {"name": "NO",  "price": 1 - yes_price},
                 ],
                 "volume": 310_000.00,
                 "active": False,   # resolved — should be filtered out
@@ -84,8 +88,8 @@ class PolymarketClient:
                 "id": "poly-005",
                 "question": "Will GPT-5 be released before June 2025?",
                 "outcomes": [
-                    {"name": "YES", "price": 0.45},
-                    {"name": "NO",  "price": 0.55},
+                    {"name": "YES", "price": yes_price},
+                    {"name": "NO",  "price": 1 - yes_price},
                 ],
                 "volume": 2_100.00,  # low volume — should be filtered out
                 "active": True,
@@ -106,3 +110,17 @@ class PolymarketClient:
             )
             for item in raw
         ]
+        
+    
+
+    def _mutate_price(self, market_id: str, base_price: float) -> float:
+        prev = self._price_memory.get(market_id, base_price)
+
+        # simulate small movement
+        new_price = prev + random.uniform(-0.03, 0.03)
+
+        # clamp between 0.01 and 0.99
+        new_price = max(0.01, min(0.99, new_price))
+
+        self._price_memory[market_id] = new_price
+        return new_price    
