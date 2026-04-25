@@ -18,8 +18,10 @@ Run:
 import logging
 import time
 
+from event_collector.collector import EventCollector
 from market_scanner.scanner import MarketScanner
 from signal_engine.engine import SignalEngine
+from signal_engine.strategies.event_strategy import EventStrategy
 from signal_engine.strategies.momemtum import MomentumStrategy
 from trade_simulator.executor import TradeExecutor
 from trade_simulator.simulator import TradeSimulator
@@ -34,13 +36,16 @@ MAX_CYCLES: int | None = None      # None = run forever; set an int for testing
 
 # ── Initialisation ────────────────────────────────────────────────────────────
 
-def build_components() -> tuple[MarketScanner, SignalEngine, TradeSimulator]:
+def build_components() -> tuple[MarketScanner, EventCollector, SignalEngine, TradeSimulator]:
     """Construct and wire all bot components."""
     scanner = MarketScanner(min_volume=10_000)
 
+    collector = EventCollector()
+
     engine = SignalEngine(
         strategies=[
-            MomentumStrategy(threshold=0.01),
+            MomentumStrategy(threshold=0.05),
+            EventStrategy(events=[], min_divergence=0.10),
         ]
     )
 
@@ -49,13 +54,14 @@ def build_components() -> tuple[MarketScanner, SignalEngine, TradeSimulator]:
         max_open_trades=5,
     )
 
-    return scanner, engine, simulator
+    return scanner, collector, engine, simulator
 
 
 # ── Cycle logic ───────────────────────────────────────────────────────────────
 
 def run_cycle(
     scanner: MarketScanner,
+    collector: EventCollector,
     engine: SignalEngine,
     executor: TradeExecutor,
     cycle_num: int,
@@ -64,13 +70,16 @@ def run_cycle(
 
     logger.info("━━━ Cycle %d ━━━", cycle_num)
 
-    # 1. Fetch markets
+    # 1. Fetch markets and events
     markets = scanner.get_active_markets()
     market_index = {m.id: m for m in markets}
     logger.info("Markets scanned: %d", len(markets))
 
-    # 2. Generate signals
-    signals = engine.generate_signals(markets)
+    events = collector.get_events()
+    logger.info("Events collected: %d", len(events))
+
+    # 2. Generate signals (strategies use both markets and events)
+    signals = engine.generate_signals(markets, events=events)
     logger.info("Signals generated: %d", len(signals))
 
     # 3. Execute trades
@@ -128,13 +137,13 @@ def main() -> None:
 
     logger.info("Starting Polybot")
 
-    scanner, engine, simulator = build_components()
+    scanner, collector, engine, simulator = build_components()
 
     cycle = 1
     try:
         while MAX_CYCLES is None or cycle <= MAX_CYCLES:
             try:
-                run_cycle(scanner, engine, simulator, cycle)
+                run_cycle(scanner, collector, engine, simulator, cycle)
             except Exception:
                 logger.exception("Unhandled error in cycle %d — continuing", cycle)
 
